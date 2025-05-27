@@ -32,10 +32,11 @@ Drag to reorder systems in the System List file to change execution order of the
     {
       await UniTask.Delay(3000);
 
+      Debug.Log($"Even though I'm first in the execution order, I won't initialize until SecondSystem is initialized since I depend on it.");
+
       var secondSystem = await Orchestrator.GetSystemAsync<SecondSystem>();
       
-      Debug.Log($"Even though I'm first in the execution order, I won't initialize until SecondSystem is initialized since I depend on it.");
-      Debug.Log($"SecondSystem's value is {secondSystem.foo}.")
+      Debug.Log($"SecondSystem is now initialized and it's value is {secondSystem.foo}.")
     }
 
     public void Update()
