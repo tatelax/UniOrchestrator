@@ -173,7 +173,7 @@ namespace Orchestrator
 
             while (_systems[systemInstance] != SystemStatus.Completed)
             {
-                await UniTask.Yield(); // or UniTask.DelayFrame(1) for a frame delay
+                await UniTask.Yield();
             }
 
             return systemInstance;
