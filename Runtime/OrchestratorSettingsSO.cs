@@ -7,5 +7,7 @@ namespace Orchestrator
   {
     [SerializeField] private SystemListSO systemList;
     [SerializeField] private bool haltOnBootFailure;
+
+    public SystemListSO SystemList => systemList;
   }
 }
