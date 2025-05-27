@@ -11,7 +11,6 @@ namespace Orchestrator
     {
         NotStarted,
         Loading,
-        Running,
         Completed,
         Failed
     }
@@ -21,7 +20,6 @@ namespace Orchestrator
         Pending,
         Starting,
         Running,
-        Completed,
         Failed
     }
 
@@ -108,7 +106,7 @@ namespace Orchestrator
                 onCompleted: i =>
                 {
                     var system = systemFactories[i].system;
-                    _systems[system] = SystemStatus.Completed;
+                    _systems[system] = SystemStatus.Running;
                     Debug.Log($"Task {system.GetType().Name} completed");
                     successfulBoots++;
                 },
@@ -171,7 +169,7 @@ namespace Orchestrator
             if (systemInstance == null)
                 throw new InvalidOperationException($"System of type {typeof(T).Name} not found.");
 
-            while (_systems[systemInstance] != SystemStatus.Completed)
+            while (_systems[systemInstance] != SystemStatus.Running)
             {
                 await UniTask.Yield();
             }

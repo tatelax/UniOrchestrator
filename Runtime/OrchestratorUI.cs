@@ -6,7 +6,7 @@ namespace Orchestrator
 {
   public class OrchestratorUI : MonoBehaviour
   {
-    [Header("Assign your TextMeshProUGUI here")]
+    [Tooltip("Outputs preformatted text to a TMP object")]
     [SerializeField] private TextMeshProUGUI statusText;
 
     private readonly StringBuilder _sb = new();
@@ -30,7 +30,6 @@ namespace Orchestrator
           SystemStatus.Pending => "#888888",
           SystemStatus.Starting => "#FFD600",
           SystemStatus.Running => "#00BFFF",
-          SystemStatus.Completed => "#37FF6A",
           SystemStatus.Failed => "#FF4B4B",
           _ => "#FFFFFF"
         };
