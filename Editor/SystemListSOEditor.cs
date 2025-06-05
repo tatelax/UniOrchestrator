@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditorInternal;
@@ -10,64 +11,64 @@ namespace Orchestrator.Editor
     public class SystemListSOEditor : UnityEditor.Editor
     {
         private ReorderableList _list;
-        private string[] _allTypeNames;
         private Type[] _allTypes;
-        private int _selectedIndex = 0; // Start at 0 for placeholder
-
-        private static readonly string ListTooltip = "Drag to reorder. These are the names of all concrete system types (implementing ISystem) you've added.";
-        private static readonly string DropdownTooltip = "Select an available system type to add it to the list.";
-        private static readonly string AddButtonTooltip = "Add the selected system type to the list. Each type can only be added once.";
-        private static readonly string RemoveButtonTooltip = "Remove this system type from the list.";
+        private int _selectedIndex = 0;
+        private List<Type> _filteredTypes = new();
+        private GUIContent[] _filteredOptions;
+        private enum DropdownState { NoSystems, AllAdded, CanAdd }
+        private DropdownState _dropdownState = DropdownState.CanAdd;
 
         void OnEnable()
         {
             var so = (SystemListSO)target;
-
-            // Gather all concrete, non-abstract ISystem types
             _allTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(a =>
-                {
-                    try { return a.GetTypes(); } catch { return Array.Empty<Type>(); }
-                })
+                .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
                 .Where(t => typeof(ISystem).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
                 .OrderBy(t => t.FullName)
                 .ToArray();
 
-            _allTypeNames = _allTypes.Select(t => t.FullName).ToArray();
-
-            // Setup ReorderableList
-            _list = new ReorderableList(so.systemTypeNames, typeof(string), true, true, false, false)
+            _list = new ReorderableList(so.systemTypeReferences, typeof(TypeReference), true, true, false, false)
             {
                 drawHeaderCallback = rect =>
                 {
-                    EditorGUI.LabelField(rect, new GUIContent(
-                        "System Execution Order",
-                        ListTooltip
-                    ), EditorStyles.boldLabel);
+                    EditorGUI.LabelField(rect, "System Execution Order", EditorStyles.boldLabel);
                 },
                 drawElementCallback = (rect, index, active, focused) =>
                 {
-                    var item = so.systemTypeNames[index];
-
+                    var soInner = (SystemListSO)target;
+                    if (index >= soInner.systemTypeReferences.Count) return;
+                    var item = soInner.systemTypeReferences[index];
                     var buttonWidth = 80;
                     var spacing = 8;
-                    var buttonRect = new Rect(rect.x + rect.width - buttonWidth, rect.y + 2, buttonWidth - spacing, rect.height - 4);
-                    var labelRect = new Rect(rect.x, rect.y, rect.width - buttonWidth - spacing, rect.height);
+                    var checkboxWidth = 20;
+                    var labelRect = new Rect(rect.x, rect.y, rect.width - buttonWidth - checkboxWidth - 2 * spacing, rect.height);
+                    var checkboxRect = new Rect(rect.x + rect.width - buttonWidth - checkboxWidth - spacing, rect.y + 2, checkboxWidth, rect.height - 4);
 
-                    EditorGUI.LabelField(labelRect, new GUIContent(item, item), EditorStyles.largeLabel);
-
-                    GUI.backgroundColor = new Color(1.0f, 0.45f, 0.45f); // soft red
-
-                    if (GUI.Button(buttonRect, new GUIContent("Remove", RemoveButtonTooltip)))
+                    bool enabled = item.Enabled;
+                    bool newEnabled = EditorGUI.Toggle(checkboxRect, enabled);
+                    if (newEnabled != enabled)
                     {
-                        if (EditorUtility.DisplayDialog(
-                                "Confirm Remove",
-                                $"Are you sure you want to remove\n\n{item}\n\nfrom the list?",
-                                "Yes, Remove",
-                                "Cancel"))
+                        Undo.RecordObject(soInner, "Toggle System Enabled");
+                        item.Enabled = newEnabled;
+                        EditorUtility.SetDirty(soInner);
+
+                        Debug.Log($"[SystemListSO] System {(item.Type != null ? item.Type.Name : "(null)")} {(newEnabled ? "ENABLED" : "DISABLED")}", soInner);
+                    }
+
+                    EditorGUI.LabelField(labelRect, item.ToString(), EditorStyles.largeLabel);
+
+                    var buttonRect = new Rect(rect.x + rect.width - buttonWidth, rect.y + 2, buttonWidth - spacing, rect.height - 4);
+                    GUI.backgroundColor = new Color(1.0f, 0.45f, 0.45f);
+                    if (GUI.Button(buttonRect, "Remove"))
+                    {
+                        if (EditorUtility.DisplayDialog("Confirm Remove", $"Are you sure you want to remove\n\n{item}\n\nfrom the list?", "Yes, Remove", "Cancel"))
                         {
-                            so.systemTypeNames.RemoveAt(index);
-                            EditorUtility.SetDirty(so);
+                            string removedName = item.Type != null ? item.Type.Name : "(null)";
+                            soInner.systemTypeReferences.RemoveAt(index);
+                            EditorUtility.SetDirty(soInner);
+                            _selectedIndex = 0;
+
+                            Debug.Log($"[SystemListSO] System REMOVED: {removedName}", soInner);
                         }
                     }
                     GUI.backgroundColor = Color.white;
@@ -75,76 +76,99 @@ namespace Orchestrator.Editor
             };
         }
 
-        private GUIContent[] GetSystemTypeOptions()
+        private void UpdateDropdownOptions(SystemListSO so)
         {
-            var options = new GUIContent[_allTypeNames.Length + 1];
-            options[0] = new GUIContent("Select a system…", "Pick a system type to add.");
-            for (int i = 0; i < _allTypeNames.Length; i++)
-                options[i + 1] = new GUIContent(_allTypeNames[i], _allTypeNames[i]);
-            return options;
+            _filteredTypes.Clear();
+            if (_allTypes.Length == 0)
+            {
+                _dropdownState = DropdownState.NoSystems;
+                _filteredOptions = new[] { new GUIContent("No systems found") };
+                _filteredTypes.Add(null);
+                return;
+            }
+
+            var existingNames = new HashSet<string>(so.systemTypeReferences.Where(tr => tr != null).Select(tr => tr.Name));
+            foreach (var type in _allTypes)
+            {
+                if (existingNames.Contains(type.AssemblyQualifiedName)) continue;
+                _filteredTypes.Add(type);
+            }
+
+            if (_filteredTypes.Count == 0)
+            {
+                _dropdownState = DropdownState.AllAdded;
+                _filteredOptions = new[] { new GUIContent("All systems have been added") };
+                _filteredTypes.Add(null);
+            }
+            else
+            {
+                _dropdownState = DropdownState.CanAdd;
+                _filteredTypes.Insert(0, null);
+                _filteredOptions = _filteredTypes
+                    .Select((t, i) => i == 0 ? new GUIContent("Select a system…") : new GUIContent(t.Name))
+                    .ToArray();
+            }
         }
 
         public override void OnInspectorGUI()
         {
             var so = (SystemListSO)target;
             serializedObject.Update();
+            UpdateDropdownOptions(so);
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField(
-                new GUIContent(
-                    "System List",
-                    "Manage systems that will be executed. Drag to reorder. Add only types implementing ISystem."
-                ),
-                EditorStyles.whiteLargeLabel
-            );
-            
+            EditorGUILayout.LabelField("System List", EditorStyles.whiteLargeLabel);
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox("This asset holds the list of ISystem implementations to include. Use the dropdown below to add new types.", MessageType.Info);
-
             EditorGUILayout.Space(10);
 
-            _list.list = so.systemTypeNames;
+            _list.list = so.systemTypeReferences;
             _list.DoLayoutList();
 
-            if (so.systemTypeNames.Count == 0)
-            {
+            if (so.systemTypeReferences.Count == 0)
                 EditorGUILayout.HelpBox("No systems added yet. Use the dropdown below to add system types.", MessageType.None);
-            }
 
             EditorGUILayout.Space(10);
 
-            EditorGUILayout.LabelField(
-                new GUIContent("Add New System Type", DropdownTooltip),
-                EditorStyles.boldLabel
-            );
-
-            // Dropdown with placeholder, no label next to dropdown
-            var options = GetSystemTypeOptions();
+            EditorGUILayout.LabelField("Add New System Type", EditorStyles.boldLabel);
 
             EditorGUILayout.BeginHorizontal();
-            _selectedIndex = EditorGUILayout.Popup(
+
+            bool dropdownDisabled = _dropdownState != DropdownState.CanAdd;
+
+            EditorGUI.BeginDisabledGroup(dropdownDisabled);
+
+            int newSelected = EditorGUILayout.Popup(
                 _selectedIndex,
-                options,
+                _filteredOptions,
                 GUILayout.MinWidth(200), GUILayout.MaxWidth(600)
             );
-
-            // Can only add if a real type is selected (index > 0) and not already present
-            bool canAdd = _selectedIndex > 0
-                          && !so.systemTypeNames.Contains(_allTypeNames[_selectedIndex - 1]);
+            bool canAdd = !dropdownDisabled && newSelected > 0 && _filteredTypes[newSelected] != null;
 
             EditorGUI.BeginDisabledGroup(!canAdd);
-            GUI.backgroundColor = canAdd ? new Color(0.4f, 0.85f, 0.6f) : Color.white; // soft green
-            if (GUILayout.Button(new GUIContent("Add", AddButtonTooltip), GUILayout.Width(80)))
+            GUI.backgroundColor = canAdd ? new Color(0.4f, 0.85f, 0.6f) : Color.white;
+            if (GUILayout.Button("Add", GUILayout.Width(80)))
             {
-                string typeName = _allTypeNames[_selectedIndex - 1];
-                if (!so.systemTypeNames.Contains(typeName))
+                Type toAdd = _filteredTypes[newSelected];
+                if (toAdd != null && !so.systemTypeReferences.Any(tr => tr != null && tr.Name == toAdd.AssemblyQualifiedName))
                 {
-                    so.systemTypeNames.Add(typeName);
+                    var tr = new TypeReference();
+                    tr.SetType(toAdd);
+                    so.systemTypeReferences.Add(tr);
                     EditorUtility.SetDirty(so);
+
+                    Debug.Log($"[SystemListSO] System ADDED: {toAdd.Name}", so);
                 }
-                _selectedIndex = 0; // reset to placeholder
+                _selectedIndex = 0;
+                GUI.FocusControl(null);
+                serializedObject.ApplyModifiedProperties();
+                return;
             }
+            EditorGUI.EndDisabledGroup();
             GUI.backgroundColor = Color.white;
+
+            _selectedIndex = newSelected;
+
             EditorGUI.EndDisabledGroup();
 
             EditorGUILayout.EndHorizontal();

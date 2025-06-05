@@ -38,19 +38,19 @@ namespace Orchestrator
         public static async UniTask Boot()
         {
             Status = BootStatus.Loading;
-            Debug.Log("Loading systems...");
-            
-            var allSettingsFiles = Resources.FindObjectsOfTypeAll<OrchestratorSettingsSO>();
+            OrchestratorLogger.Log("Loading systems...");
+
+            var allSettingsFiles = Resources.LoadAll<OrchestratorSettingsSO>("");
 
             if (allSettingsFiles.Length == 0)
             {
-                Debug.LogError("Unable to find an Orchestrator settings file in Resources. Did you create one?");
+                OrchestratorLogger.LogError("Unable to find an Orchestrator settings file in Resources. Did you create one?");
                 return;
             }
-            
+
             if (allSettingsFiles.Length > 1)
             {
-                Debug.LogError("Found multiple settings files. There should only be one.");
+                OrchestratorLogger.LogError("Found multiple settings files. There should only be one.");
                 return;
             }
 
@@ -59,7 +59,7 @@ namespace Orchestrator
 
             if (systemList is null)
             {
-                Debug.LogError("No systems list specified. Did you assign it in the settings scriptable object?");
+                OrchestratorLogger.LogError("No systems list specified. Did you assign it in the settings scriptable object?");
                 return;
             }
 
@@ -67,11 +67,11 @@ namespace Orchestrator
 
             if (systemInstances.Count == 0)
             {
-                Debug.LogError("No systems found. Add systems in the system list scriptable object.");
+                OrchestratorLogger.LogError("No systems found. Add systems in the system list scriptable object.");
                 return;
             }
 
-            Debug.Log($"Found {systemInstances.Count} systems");
+            OrchestratorLogger.Log($"Found {systemInstances.Count} systems");
 
             PlayerLoopSystem customSystemsParent = new()
             {
@@ -102,50 +102,59 @@ namespace Orchestrator
                 {
                     var system = systemFactories[i].system;
                     _systems[system] = SystemStatus.Starting;
-                    Debug.Log($"Task {system.GetType().Name} started");
+                    OrchestratorLogger.Log($"Task \"{system.GetType().Name}\" started");
                 },
                 onCompleted: i =>
                 {
                     var system = systemFactories[i].system;
                     _systems[system] = SystemStatus.Running;
-                    Debug.Log($"Task {system.GetType().Name} completed");
+                    OrchestratorLogger.Log($"Task \"{system.GetType().Name}\" completed");
                     successfulBoots++;
                 },
                 onFailed: (i, ex) =>
                 {
                     var system = systemFactories[i].system;
                     _systems[system] = SystemStatus.Failed;
-                    Debug.LogError($"Task {system.GetType().Name} failed: {ex.Message}");
+                    OrchestratorLogger.LogError($"Task \"{system.GetType().Name}\" failed: {ex.Message} \n {ex.StackTrace}");
                     failedBoots++;
                 });
 
             Status = BootStatus.Completed;
 
-            Debug.Log($"System init finished. {successfulBoots} successful boots. {failedBoots} failed boots.");
+            OrchestratorLogger.Log($"System init finished. {successfulBoots} successful boots. {failedBoots} failed boots.");
+
+            if (settings.HaltOnBootFailure && failedBoots > 0)
+            {
+                OrchestratorLogger.LogError("Halted boot process due to boot failure and Halt On Boot Failure is enabled in Orchestrator settings.");
+                return;
+            }
 
             customSystemsParent.subSystemList = customSystems.ToArray();
-            PlayerLoopInterface.InsertSystemBefore(customSystemsParent, typeof(UnityEngine.PlayerLoop.Update.ScriptRunBehaviourUpdate));
+            PlayerLoopInterface.InsertSystemBefore(customSystemsParent, settings.PlayerLoopBeforeMethod());
         }
 
         private static HashSet<ISystem> LoadSystems(SystemListSO systemTypeListSO)
         {
             var systems = new HashSet<ISystem>();
-            foreach (var typeName in systemTypeListSO.systemTypeNames)
+            foreach (var typeReference in systemTypeListSO.systemTypeReferences)
             {
-                var type = AppDomain.CurrentDomain.GetAssemblies()
-                    .Select(a => a.GetType(typeName))
-                    .FirstOrDefault(t => t != null);
+                if (!typeReference.Enabled)
+                    continue;
+                
+                var type = typeReference.Type;
 
                 if (type == null)
                 {
-                    Debug.LogError($"Type '{typeName}' not found. Did you rename or move the class?");
+                    OrchestratorLogger.LogError($"Type '{typeReference}' not found. Did you rename or move the class?");
                     continue;
                 }
+                
                 if (!typeof(ISystem).IsAssignableFrom(type))
                 {
-                    Debug.LogError($"Type '{typeName}' does not implement ISystem.");
+                    OrchestratorLogger.LogError($"Type '{typeReference}' does not implement ISystem.");
                     continue;
                 }
+                
                 try
                 {
                     if (Activator.CreateInstance(type) is ISystem instance)
@@ -153,7 +162,7 @@ namespace Orchestrator
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Failed to create instance of {typeName}: {ex.Message}");
+                    OrchestratorLogger.LogError($"Failed to create instance of {typeReference}: {ex.Message}");
                 }
             }
             return systems;
@@ -163,7 +172,7 @@ namespace Orchestrator
         {
             return _systems.Keys.ToArray();
         }
-        
+
         public static async UniTask<T> GetSystemAsync<T>() where T : class, ISystem
         {
             var systemInstance = _systems.Keys.OfType<T>().FirstOrDefault();
@@ -177,7 +186,7 @@ namespace Orchestrator
 
             return systemInstance;
         }
-        
+
         public static T GetSystem<T>() where T : class, ISystem
         {
             var systemInstance = _systems.Keys.OfType<T>().FirstOrDefault();

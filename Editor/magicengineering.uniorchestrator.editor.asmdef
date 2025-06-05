@@ -1,6 +1,6 @@
 {
     "name": "magicengineering.uniorchestrator.editor",
-    "rootNamespace": "",
+    "rootNamespace": "Orchestrator.Editor",
     "references": [
         "GUID:fc9214a1889548e8978f93b5c18d2edc"
     ],
