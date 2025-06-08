@@ -52,7 +52,7 @@ namespace Orchestrator.Editor
                         item.Enabled = newEnabled;
                         EditorUtility.SetDirty(soInner);
 
-                        Debug.Log($"[SystemListSO] System {(item.Type != null ? item.Type.Name : "(null)")} {(newEnabled ? "ENABLED" : "DISABLED")}", soInner);
+                        OrchestratorLogger.Log($"System {(item.Type != null ? item.Type.Name : "(null)")} {(newEnabled ? "ENABLED" : "DISABLED")}", soInner);
                     }
 
                     EditorGUI.LabelField(labelRect, item.ToString(), EditorStyles.largeLabel);
@@ -68,7 +68,7 @@ namespace Orchestrator.Editor
                             EditorUtility.SetDirty(soInner);
                             _selectedIndex = 0;
 
-                            Debug.Log($"[SystemListSO] System REMOVED: {removedName}", soInner);
+                            OrchestratorLogger.Log($"System REMOVED: {removedName}", soInner);
                         }
                     }
                     GUI.backgroundColor = Color.white;
@@ -157,7 +157,7 @@ namespace Orchestrator.Editor
                     so.systemTypeReferences.Add(tr);
                     EditorUtility.SetDirty(so);
 
-                    Debug.Log($"[SystemListSO] System ADDED: {toAdd.Name}", so);
+                    OrchestratorLogger.Log($"System ADDED: {toAdd.Name}", so);
                 }
                 _selectedIndex = 0;
                 GUI.FocusControl(null);
