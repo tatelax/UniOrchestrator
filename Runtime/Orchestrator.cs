@@ -6,13 +6,13 @@ using Helpers;
 using UnityEngine;
 using UnityEngine.LowLevel;
 
-namespace Orchestrator
+namespace UniOrchestrator
 {
     public enum BootStatus
     {
         NotStarted,
         Loading,
-        Completed,
+        Successful,
         Failed
     }
 
@@ -28,10 +28,21 @@ namespace Orchestrator
 
     public static class Orchestrator
     {
-        public static BootStatus Status { get; private set; } = BootStatus.NotStarted;
+        public static BootStatus Status
+        {
+            get => _status;
+            private set
+            {
+                _status = value;
+                OnBootStatusChanged?.Invoke(value);
+            }
+        }
+        
+        public static Action<BootStatus> OnBootStatusChanged;
 
         private static readonly Dictionary<ISystem, SystemStatus> _systems = new();
-
+        private static BootStatus _status = BootStatus.NotStarted;
+        
         public static IReadOnlyDictionary<ISystem, SystemStatus> Systems => _systems;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -119,18 +130,29 @@ namespace Orchestrator
                     failedBoots++;
                 });
 
-            Status = BootStatus.Completed;
-
             OrchestratorLogger.Log($"System init finished. {successfulBoots} successful boots. {failedBoots} failed boots.");
 
             if (settings.HaltOnBootFailure && failedBoots > 0)
             {
                 OrchestratorLogger.LogError("Halted boot process due to boot failure and Halt On Boot Failure is enabled in Orchestrator settings.");
+                Status = BootStatus.Failed;
                 return;
             }
 
             customSystemsParent.subSystemList = customSystems.ToArray();
             PlayerLoopInterface.InsertSystemBefore(customSystemsParent, settings.PlayerLoopBeforeMethod());
+
+            Status = BootStatus.Successful;
+
+            CallReadyOnSystems();
+        }
+
+        private static void CallReadyOnSystems()
+        {
+            foreach (var system in _systems)
+            {
+                system.Key.Ready();
+            }
         }
 
         private static HashSet<ISystem> LoadSystems(SystemListSO systemTypeListSO)

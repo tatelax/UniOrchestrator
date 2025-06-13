@@ -10,7 +10,7 @@ using UnityEngine.Experimental.LowLevel;
 using UnityEngine.Experimental.PlayerLoop;
 #endif
 
-namespace Orchestrator
+namespace UniOrchestrator
 {
     /// <summary>
     /// Unity exposes the PlayerLoop to allow you to insert your own "systems" to be run in similar ways to eg. Update or FixedUpate.

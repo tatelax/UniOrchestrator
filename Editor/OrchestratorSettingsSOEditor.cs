@@ -1,5 +1,5 @@
 using UnityEditor;
-using Orchestrator;
+using UniOrchestrator;
 
 [CustomEditor(typeof(OrchestratorSettingsSO))]
 internal class OrchestratorSettingsSOEditor : Editor

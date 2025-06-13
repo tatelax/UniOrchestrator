@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace Orchestrator.Editor
+namespace UniOrchestrator.Editor
 {
     [CustomEditor(typeof(SystemListSO))]
     public class SystemListSOEditor : UnityEditor.Editor

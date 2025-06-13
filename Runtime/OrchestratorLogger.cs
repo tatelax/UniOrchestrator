@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Orchestrator
+namespace UniOrchestrator
 {
   public static class OrchestratorLogger
   {

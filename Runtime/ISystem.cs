@@ -1,10 +1,13 @@
 using Cysharp.Threading.Tasks;
 
-namespace Orchestrator
+namespace UniOrchestrator
 {
   public interface ISystem
   {
     async UniTask Init() { await UniTask.CompletedTask; }
+
+    void Ready() { }
+
     void Update() { }
   }
 }

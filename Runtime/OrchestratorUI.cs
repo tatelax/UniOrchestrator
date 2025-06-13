@@ -2,7 +2,7 @@ using System.Text;
 using TMPro;
 using UnityEngine;
 
-namespace Orchestrator
+namespace UniOrchestrator
 {
   public class OrchestratorUI : MonoBehaviour
   {

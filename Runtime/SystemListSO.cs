@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Orchestrator
+namespace UniOrchestrator
 {
   [CreateAssetMenu(menuName = "Orchestrator/System List", fileName = "New System List", order = 1)]
   public class SystemListSO : ScriptableObject
